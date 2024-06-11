@@ -30,9 +30,14 @@
         {
           options.languages.javascript = {
             packageManager = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum [ "yarn" "pnpm" ]);
+              type = lib.types.nullOr (lib.types.oneOf [ lib.types.package (lib.types.enum [ "yarn" "pnpm" ]) ]);
               default = null;
-              apply = lib.mapNullable (arg: cfg.package.pkgs.${arg});
+              apply = lib.mapNullable (arg:
+                if builtins.typeOf arg == "string" then
+                  cfg.package.pkgs.${arg}
+                else
+                  arg
+              );
             };
 
             handlePrisma = lib.mkEnableOption { };
@@ -58,13 +63,15 @@
           };
 
           config = lib.mkIf cfg.enable {
-            packages =
-              (lib.optionals (cfg.packageManager != null) [ cfg.packageManager ]) ++
+            packages = lib.flatten [
+              (lib.optionals (cfg.packageManager != null) [ cfg.packageManager ])
+
               (lib.optionals cfg.handlePrisma [
                 cfg.package.pkgs.prisma
                 pkgs.openssl
                 pkgs.pkg-config
-              ]);
+              ])
+            ];
 
             env = lib.mkIf cfg.handlePrisma {
               PRISMA_QUERY_ENGINE_LIBRARY = "${pkgs.prisma-engines}/lib/libquery_engine.node";
