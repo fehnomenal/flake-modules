@@ -19,6 +19,21 @@ let
     ''end''
   ];
 
+  patchDependencyPrefix = prefix: version:
+    let
+      patchInObject = obj: lib.concatStringsSep " " [
+        ''if .${obj}''
+        ''then .${obj} = .${obj} + ( .${obj} | with_entries( select( .key | startswith( "${prefix}" ) ) ) | map_values( "${version}" ) )''
+        ''end''
+      ];
+
+    in
+
+    lib.concatStringsSep " | " [
+      (patchInObject "dependencies")
+      (patchInObject "devDependencies")
+    ];
+
   patchPackageManager = ''if .packageManager then .packageManager = "${lib.getName packageManager}@${lib.getVersion packageManager}" end'';
 
   patchEngines = [
@@ -33,7 +48,7 @@ let
       (patchDependency "@types/node" (extract-node-version (lib.getVersion nodejs)))
     ] ++
     (lib.optionals handlePrisma [
-      (patchDependency "@prisma/client" (lib.getVersion nodejs.pkgs.prisma))
+      (patchDependencyPrefix "@prisma/" (lib.getVersion nodejs.pkgs.prisma))
       (patchDependency "prisma" (lib.getVersion nodejs.pkgs.prisma))
     ]) ++
     (lib.optionals (packageManager != null) [ patchPackageManager ]) ++
@@ -44,7 +59,7 @@ in
 ''
   if ${jq} . ${file} >/dev/null 2>&1; then
     tmp=$(mktemp)
-    ${jq} '${lib.strings.concatStringsSep " | " filters}' ${file} > $tmp
+    ${jq} '${lib.concatStringsSep " | " filters}' ${file} > $tmp
     mv $tmp ${file}
   fi
 ''
